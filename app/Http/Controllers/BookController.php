@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Book;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class BookController extends Controller
 {
@@ -11,27 +12,28 @@ class BookController extends Controller
      * Display a listing of the resource.
      */
     public function index(Request $request)
-    {
-        $title = $request->input("title");
-        $filter = $request->input("filter", "");
+{
+    $title = $request->input("title");
+    $filter = $request->input("filter", "");
 
-        $books = Book::when($title,
-            fn($query, $title) => $query->title($title)
-        );
+    $query = Book::when($title,
+        fn($query, $title) => $query->title($title)
+    );
 
-        /* sending requests to the Book Model for each specific filter
-        *  graping filters from the book.index view
-        */
-        $books = match($filter) {
-            "popular_last_month" => $books->popularLastMonth(),
-            "popular_last_6months" => $books->popularLast6Months(),
-            "highest_rated_last_month" => $books->highestRatedLastMonth(),
-            "highest_rated_last_6months" => $books->highestRated6LastMonths(),
-            default => $books->latest()
-        };
-        $books = $books->get();
-        return view("books.index", ["books" => $books]);
-    }
+    $query = match($filter) {
+        "popular_last_month" => $query->popularLastMonth(),
+        "popular_last_6months" => $query->popularLast6Months(),
+        "highest_rated_last_month" => $query->highestRatedLastMonth(),
+        "highest_rated_last_6months" => $query->highestRated6LastMonths(),
+        default => $query->latest()
+    };
+
+    $cacheKey = "books:" . md5($filter . $title);
+
+    $books = Cache::remember($cacheKey, 3600, fn() => $query->get());
+
+    return view("books.index", ["books" => $books]);
+}
 
     /**
      * Show the form for creating a new resource.
